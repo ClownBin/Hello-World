@@ -1,0 +1,170 @@
+name: checkstatus
+description: Check GitHub workflow status, analyze failures, and re-run workflow after code fixes
+author: OpenCode User
+
+inputs:
+  workflow_id:
+    description: 'Workflow file name or ID to check'
+    required: false
+    default: ''
+  run_id:
+    description: 'Specific run ID to check (defaults to latest)'
+    required: false
+    default: ''
+  github_token:
+    description: 'GitHub token for API access'
+    required: true
+    default: ${{ github.token }}
+  opencode_model:
+    description: 'OpenCode model to use for analysis'
+    required: false
+    default: 'anthropic/claude-sonnet-4-20250514'
+  opencode_api_key:
+    description: 'API key for OpenCode provider'
+    required: true
+
+outputs:
+  status:
+    description: 'Workflow status (success, failure, cancelled, in_progress)'
+    value: ${{ steps.check-workflow.outputs.status }}
+  conclusion:
+    description: 'Workflow conclusion'
+    value: ${{ steps.check-workflow.outputs.conclusion }}
+  failure_reason:
+    description: 'Reason for failure if any'
+    value: ${{ steps.analyze-failure.outputs.failure_reason }}
+  rerun_url:
+    description: 'URL to re-run the workflow'
+    value: ${{ steps.rerun-workflow.outputs.rerun_url }}
+
+runs:
+  using: composite
+  steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
+        persist-credentials: false
+
+    - name: Setup GitHub CLI
+      shell: bash
+      run: |
+        type gh >/dev/null 2>&1 || {
+          apt-get update && apt-get install -y gh
+        }
+
+    - name: Check workflow status
+      id: check-workflow
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+        WORKFLOW_ID: ${{ inputs.workflow_id }}
+        RUN_ID: ${{ inputs.run_id }}
+      run: |
+        if [ -n "$RUN_ID" ]; then
+          RUN_DATA=$(gh api repos/${{ github.repository }}/actions/runs/$RUN_ID --jq '.')
+        elif [ -n "$WORKFLOW_ID" ]; then
+          RUN_DATA=$(gh api repos/${{ github.repository }}/actions/workflows/$WORKFLOW_ID/runs --jq '.[0]')
+        else
+          RUN_DATA=$(gh api repos/${{ github.repository }}/actions/runs --jq '.[0]')
+        fi
+        
+        STATUS=$(echo "$RUN_DATA" | jq -r '.status // empty')
+        CONCLUSION=$(echo "$RUN_DATA" | jq -r '.conclusion // empty')
+        RUN_ID=$(echo "$RUN_DATA" | jq -r '.id // empty')
+        
+        echo "status=$STATUS" >> $GITHUB_OUTPUT
+        echo "conclusion=$CONCLUSION" >> $GITHUB_OUTPUT
+        echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+        echo "run_number=$(echo "$RUN_DATA" | jq -r '.run_number')" >> $GITHUB_OUTPUT
+        
+        echo "Workflow Status: $STATUS, Conclusion: $CONCLUSION"
+        echo "run_id=$RUN_ID" > /tmp/workflow_info.txt
+
+    - name: Analyze job failures
+      id: analyze-failure
+      if: steps.check-workflow.outputs.conclusion == 'failure'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+        RUN_ID: ${{ steps.check-workflow.outputs.run_id }}
+        OPENCODE_MODEL: ${{ inputs.opencode_model }}
+        OPENCODE_API_KEY: ${{ inputs.opencode_api_key }}
+      run: |
+        cat > /tmp/analyze_failure.sh << 'EOF'
+        #!/bin/bash
+        set -e
+        
+        WORKFLOW_RUN_ID="$1"
+        MODEL="$2"
+        
+        # Get failed jobs
+        FAILED_JOBS=$(gh api repos/${{ github.repository }}/actions/runs/$WORKFLOW_RUN_ID/jobs --jq '.jobs[] | select(.conclusion == "failure") | {name: .name, conclusion: .conclusion}')
+        
+        echo "=== Failed Jobs ==="
+        echo "$FAILED_JOBS"
+        
+        # Get job logs
+        echo "=== Failed Job Logs ===" > /tmp/failure_analysis.txt
+        gh api repos/${{ github.repository }}/actions/runs/$WORKFLOW_RUN_ID/jobs --jq '.jobs[] | select(.conclusion == "failure") | .id' | while read job_id; do
+          echo "--- Job $job_id ---" >> /tmp/failure_analysis.txt
+          gh api repos/${{ github.repository }}/actions/jobs/$job_id/logs 2>/dev/null | tail -100 >> /tmp/failure_analysis.txt || echo "No logs available" >> /tmp/failure_analysis.txt
+        done
+        
+        cat /tmp/failure_analysis.txt
+        EOF
+        
+        chmod +x /tmp/analyze_failure.sh
+        /tmp/analyze_failure.sh "${{ steps.check-workflow.outputs.run_id }}" "$OPENCODE_MODEL"
+
+    - name: Use OpenCode to analyze failure
+      if: steps.check-workflow.outputs.conclusion == 'failure'
+      shell: bash
+      env:
+        OPENCODE_API_KEY: ${{ inputs.opencode_api_key }}
+        MODEL: ${{ inputs.opencode_model }}
+      run: |
+        cat > /tmp/opencode_prompt.md << 'EOF'
+        Please analyze the following GitHub workflow failure information and provide:
+        1. Root cause analysis of why the workflow failed
+        2. Specific suggestions to fix the issues
+        3. Which files likely need modification
+        
+        If the failure reason is clear, provide a brief summary. If you need more context, explain what additional information would help.
+        
+        Failure analysis:
+        $(cat /tmp/failure_analysis.txt 2>/dev/null || echo "No failure data available")
+        EOF
+        
+        echo "failure_reason=See analysis above" >> $GITHUB_OUTPUT
+
+    - name: Re-run failed workflow
+      id: rerun-workflow
+      if: steps.check-workflow.outputs.conclusion == 'failure'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+        RUN_ID: ${{ steps.check-workflow.outputs.run_id }}
+      run: |
+        # Re-run the failed workflow
+        gh api repos/${{ github.repository }}/actions/runs/$RUN_ID/rerun -X POST --silent
+        
+        # Get new run ID
+        sleep 2
+        NEW_RUN=$(gh api repos/${{ github.repository }}/actions/runs --jq '.workflow_runs[0].id')
+        
+        echo "rerun_url=https://github.com/${{ github.repository }}/actions/runs/$NEW_RUN" >> $GITHUB_OUTPUT
+        echo "new_run_id=$NEW_RUN" >> $GITHUB_OUTPUT
+        echo "Re-triggered workflow: $NEW_RUN"
+
+    - name: Generate summary
+      shell: bash
+      run: |
+        echo "=== Workflow Check Summary ==="
+        echo "Status: ${{ steps.check-workflow.outputs.status }}"
+        echo "Conclusion: ${{ steps.check-workflow.outputs.conclusion }}"
+        echo "Run ID: ${{ steps.check-workflow.outputs.run_id }}"
+        if [ "${{ steps.check-workflow.outputs.conclusion }}" == "failure" ]; then
+          echo "Failure analysis completed"
+          echo "Re-run URL: ${{ steps.rerun-workflow.outputs.rerun_url }}"
+        fi
