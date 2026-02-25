@@ -35,6 +35,8 @@ jobs:
       - name: Check Workflow Status
         id: check
         uses: ClownBin/action-checkstatus@main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           # 可选：在当前运行已完成且结果不是 success 时让步骤失败
           fail-on-non-success: "true"
