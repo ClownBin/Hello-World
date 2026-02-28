@@ -26,4 +26,4 @@ jobs:
         settings-path: ${{ github.workspace }} # location for the settings.xml file
 
     - name: Build with Maven
-      run: echo "hello world,hello-workflow1, ${{ github }}"
+      run: echo "hello world,hello-workflow1, ${{ github.action }}"
