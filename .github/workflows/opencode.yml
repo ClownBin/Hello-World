@@ -24,7 +24,14 @@ jobs:
         uses: actions/checkout@v6
         with:
           persist-credentials: false
+## step1：初始化opencode环境
+## 1、初始化用户的执行脚本环境，如：支持用户自定义脚本执行；（用户通过配置一直可下载的路径）； 类似CICD+代码仓的场景 可以提前预置；
+## 2、mcp/skill/provider(模型配置)需要激活的部分；（with参数如果比较多，支持一份json文件规范）
+## 3、启动opencode server 常驻
+## 4、执行用户脚本+命令
 
+## step2：执行的任务项
+## 1、用户自定义bash
       - name: Run opencode
         uses: anomalyco/opencode/github@latest
         env:
