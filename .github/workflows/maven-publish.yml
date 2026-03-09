@@ -25,8 +25,11 @@ jobs:
     - name: Build with Maven
       run: echo "hello world,hello-workflow1, ${{ github.action }}"
   run-reused-workflow:
+    strategy:
+      matrix:
+        target: [dev, stage, prod]
     uses: ClownBin/Hello-World/.github/workflows/reuse-workflow.yml@hello-workflow1
     with:
-      config-path: .github/labeler.yml
+      config-path: ${{ matrix.target }}
     secrets:
       test-key: ${{ secrets.TEST_KEY }}
