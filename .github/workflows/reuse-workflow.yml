@@ -9,14 +9,26 @@ on:
     secrets:
       test-key:
         required: true
+    outputs:
+      output-key:
+        description: "The first output string"
+        value: ${{ jobs.build.outputs.output1 }}
+      output-key2:
+        description: "The first output string"
+        value: ${{ jobs.build.outputs.output2 }}
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      output1: "success build"
+      output2: ${{ steps.step2.outputs.secondword }}
     permissions:
       contents: read
       packages: write
     steps:
     - uses: actions/checkout@v4
     - name: Hello World
+      id: step2
       run: |
           echo "hello world,hello-workflow1, secrets test-key:${{ secrets.test-key }}, inputs config-path:${{ inputs.config-path }}"
+          echo "secondword=1234567890" >> $GITHUB_OUTPUT
