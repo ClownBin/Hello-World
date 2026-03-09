@@ -9,12 +9,10 @@ on:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-
     steps:
     - uses: actions/checkout@v4
     - name: Set up JDK 11
@@ -24,6 +22,11 @@ jobs:
         distribution: 'temurin'
         server-id: github # Value of the distributionManagement/repository/id field of the pom.xml
         settings-path: ${{ github.workspace }} # location for the settings.xml file
-
     - name: Build with Maven
       run: echo "hello world,hello-workflow1, ${{ github.action }}"
+  run-reused-workflow:
+    uses: ClownBin/Hello-World/.github/workflows/reuse-workflow.yml@hello-workflow1
+    with:
+      config-path: .github/labeler.yml
+    secrets:
+      test-key: ${{ secrets.TEST_KEY }}
