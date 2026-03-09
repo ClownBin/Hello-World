@@ -31,4 +31,4 @@ jobs:
       id: step2
       run: |
           echo "hello world,hello-workflow1, secrets test-key:${{ secrets.test-key }}, inputs config-path:${{ inputs.config-path }}"
-          echo "secondword=1234567890" >> $GITHUB_OUTPUT
+          echo "secondword=${{ inputs.config-path }}" >> $GITHUB_OUTPUT
