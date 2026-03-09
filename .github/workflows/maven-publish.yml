@@ -30,7 +30,8 @@ jobs:
         target: [dev, stage, prod]
     uses: ClownBin/Hello-World/.github/workflows/reuse-workflow.yml@hello-workflow1
     with:
-      config-path: ${{ matrix.target }}
+      config-path: "run-reused-workflow hello config path"
+      matrix-config-path: ${{ matrix.target }}
     secrets:
       test-key: ${{ secrets.TEST_KEY }}
   end:
