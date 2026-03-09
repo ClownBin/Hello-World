@@ -6,6 +6,9 @@ on:
       config-path:
         required: true
         type: string
+      matrix-config-path:
+        required: true
+        type: string
     secrets:
       test-key:
         required: true
@@ -31,4 +34,4 @@ jobs:
       id: step2
       run: |
           echo "hello world,hello-workflow1, secrets test-key:${{ secrets.test-key }}, inputs config-path:${{ inputs.config-path }}"
-          echo "secondword=${{ inputs.config-path }}" >> $GITHUB_OUTPUT
+          echo "secondword=${{ inputs.matrix-config-path }}" >> $GITHUB_OUTPUT
