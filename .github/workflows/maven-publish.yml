@@ -33,3 +33,12 @@ jobs:
       config-path: ${{ matrix.target }}
     secrets:
       test-key: ${{ secrets.TEST_KEY }}
+  end:
+    runs-on: ubuntu-latest
+    needs: run-reused-workflow
+    permissions:
+      contents: read
+      packages: write
+    steps:
+    - name: Matrix Hello
+      run: echo "hello world,hello-workflow1, Matrix Hello${{ needs.run-reused-workflow.outputs.output-key2 }}"
