@@ -45,10 +45,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          # 可选：在当前运行已完成且结果不是 success 时让步骤失败
           fail-on-non-success: "true"
-          # 可选：自定义 token，不填则默认使用 GITHUB_TOKEN
-          # github-token: ${{ secrets.MY_PAT }}
+          github-token: ${{ github.token }}
+          opencode-api-key: ${{ secrets.OPENCODE_API_KEY }}
 
       - name: Echo result
         run: |
