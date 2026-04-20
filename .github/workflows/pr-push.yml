@@ -15,4 +15,4 @@ jobs:
       packages: write
     steps:
     - name: Build with Maven
-      run: echo "hello world, pull_requet_push, ${{ github.action }}"
+      run: echo "hello world, pull_requet_push  12345, ${{ github.action }}"
